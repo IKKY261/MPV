@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Affiliate Video Maker</title>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script></head>
+<body class="bg-slate-50 text-slate-800 md:flex min-h-screen">
+<nav class="md:w-56 bg-white border-b md:border-r p-3 md:p-4 flex md:block gap-1 overflow-x-auto md:min-h-screen">
+ <div class="hidden md:block font-bold mb-4">🎬 Affiliate Video</div>
+ <script>
+ const tabs=[["dash","Dashboard"],["prod","Produk"],["tpl","Template Video"],["hist","Riwayat Video"],["set","Pengaturan"]];
+ document.write(tabs.map(t=>`<button data-t="${t[0]}" onclick="go('${t[0]}')" class="nav px-3 py-2 rounded-lg text-sm whitespace-nowrap md:block md:w-full text-left hover:bg-slate-100">${t[1]}</button>`).join(""));
+ </script>
+</nav>
+<main class="flex-1 p-4 md:p-8 max-w-5xl"><div id="v"></div></main>
+<script>
+const $=s=>document.querySelector(s), api=(u,o)=>fetch(u,o).then(r=>r.json());
+const card="bg-white rounded-xl border p-4", btn="px-3 py-2 rounded-lg text-sm bg-slate-900 text-white disabled:opacity-40", btn2="px-3 py-2 rounded-lg text-sm border";
+const inp="border rounded-lg px-3 py-2 text-sm w-full";
+let sel=new Set(), tab="dash", timer;
+function go(t){tab=t;sel.clear();document.querySelectorAll(".nav").forEach(b=>b.classList.toggle("bg-slate-100",b.dataset.t==t));render()}
+async function render(){clearTimeout(timer);const v=$("#v");
+ if(tab=="dash"){const [s,p,t,h,j]=await Promise.all(["status","products","templates","videos","jobs"].map(x=>api("/api/"+x)));
+  v.innerHTML=`<h1 class="text-xl font-semibold mb-4">Dashboard</h1><div class="grid grid-cols-3 gap-3 mb-4">${[["Produk",p.length],["Template",t.length],["Video",h.length]].map(a=>`<div class="${card}"><div class="text-2xl font-bold">${a[1]}</div><div class="text-xs text-slate-500">${a[0]}</div></div>`).join("")}</div>
+  <div class="${card} mb-4 text-sm"><b>Status integrasi</b><br>AI gambar: ${s.ai_image?"✅ aktif":"❌ API key belum diatur"}<br>FFmpeg: ${s.ffmpeg?"✅ terpasang":"❌ tidak ditemukan"}<br>TikTok: ⏳ ${s.tiktok}</div>
+  <div class="${card} text-sm"><b>Antrean pekerjaan</b>${j.map(x=>`<div class="py-1 border-t mt-1">${x.kind} · <b>${x.status}</b> ${x.error?`<span class="text-red-600">${x.error}</span>`:""}</div>`).join("")||"<div class='text-slate-400'>Kosong</div>"}</div>`;
+  if(j.some(x=>x.status=="antre"||x.status=="berjalan"))timer=setTimeout(render,3000);}
+ if(tab=="prod"){const p=await api("/api/products"),t=await api("/api/templates");
+  v.innerHTML=`<h1 class="text-xl font-semibold mb-4">Produk</h1>
+  <form id="pf" class="${card} grid gap-2 mb-4"><input name="name" placeholder="Nama produk" required class="${inp}"><div class="grid grid-cols-2 gap-2"><input name="price" placeholder="Harga" class="${inp}"><input name="link" placeholder="Link affiliate" class="${inp}"></div><textarea name="description" placeholder="Deskripsi" class="${inp}"></textarea><input type="file" name="photo" accept="image/*" required class="text-sm"><button class="${btn}">Simpan produk</button></form>
+  <div class="${card} mb-4 flex flex-wrap gap-2 items-center text-sm"><span>Buat video (pilih produk di bawah, bisa banyak):</span><select id="tsel" class="${inp} !w-auto">${t.map(x=>`<option value="${x.id}">${x.name}</option>`).join("")}</select><button class="${btn}" onclick="mk()" ${t.length?"":"disabled"}>Render video</button></div>
+  <div class="grid grid-cols-2 md:grid-cols-3 gap-3">${p.map(x=>`<div class="${card}"><label class="flex gap-2 text-sm font-medium"><input type="checkbox" onchange="this.checked?sel.add('${x.id}'):sel.delete('${x.id}')" ${sel.has(x.id)?"checked":""}>${x.name}</label>
+   <div class="grid grid-cols-2 gap-1 my-2"><img src="/files/${x.photo}" class="rounded aspect-[9/16] object-cover w-full">${x.ai_photo?`<img src="/files/${x.ai_photo}" class="rounded aspect-[9/16] object-cover w-full">`:`<div class="rounded bg-slate-100 text-xs text-slate-400 flex items-center justify-center text-center aspect-[9/16]">${x.ai_status=="proses"?"Memproses…":"Belum ada foto AI"}</div>`}</div>
+   <div class="text-xs text-slate-500 mb-2">${x.price||""} ${x.approved?"· ✅ foto AI dipakai":""}</div>
+   <div class="flex flex-wrap gap-1"><button class="${btn2}" onclick="gen('${x.id}')">${x.ai_photo?"Generate ulang":"Generate foto AI"}</button>${x.ai_photo&&!x.approved?`<button class="${btn2}" onclick="ap('${x.id}')">Gunakan foto</button>`:""}<button class="${btn2}" onclick="del('${x.id}')">Hapus</button></div></div>`).join("")}</div>`;
+  $("#pf").onsubmit=async e=>{e.preventDefault();await fetch("/api/products",{method:"POST",body:new FormData(e.target)});render()};
+  if(p.some(x=>x.ai_status=="proses"))timer=setTimeout(render,4000);}
+ if(tab=="tpl"){const t=await api("/api/templates");
+  v.innerHTML=`<h1 class="text-xl font-semibold mb-4">Template Video</h1>
+  <form id="tf" class="${card} grid gap-2 mb-4"><input name="name" placeholder="Nama template" required class="${inp}"><input type="file" name="video" accept="video/mp4" required class="text-sm">
+  <p class="text-xs text-slate-500">Area foto yang diganti (piksel, pada resolusi video template 9:16). Durasi 0 = sampai akhir video.</p>
+  <div class="grid grid-cols-4 gap-2">${["x","y","w","h"].map(k=>`<input name="${k}" type="number" placeholder="${k}" required class="${inp}">`).join("")}</div>
+  <div class="grid grid-cols-2 gap-2"><input name="t_start" type="number" step="0.1" placeholder="Mulai (detik)" class="${inp}"><input name="t_end" type="number" step="0.1" placeholder="Selesai (detik)" class="${inp}"></div><button class="${btn}">Upload template</button></form>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3">${t.map(x=>`<div class="${card}"><video src="/files/${x.path}" controls class="rounded aspect-[9/16] w-full object-cover"></video><div class="text-sm mt-1">${x.name}</div><div class="text-xs text-slate-500">${x.x},${x.y} ${x.w}×${x.h}</div></div>`).join("")}</div>`;
+  $("#tf").onsubmit=async e=>{e.preventDefault();await fetch("/api/templates",{method:"POST",body:new FormData(e.target)});render()};}
+ if(tab=="hist"){const h=await api("/api/videos"),j=await api("/api/jobs");
+  const run=j.filter(x=>x.kind=="video"&&(x.status=="antre"||x.status=="berjalan")).length;
+  v.innerHTML=`<h1 class="text-xl font-semibold mb-4">Riwayat Video</h1>${run?`<div class="${card} mb-3 text-sm">Merender ${run} video…<div class="h-2 bg-slate-100 rounded mt-2"><div class="h-2 bg-slate-900 rounded animate-pulse w-1/2"></div></div></div>`:""}
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3">${h.map(x=>`<div class="${card}"><video src="/files/${x.path}" controls class="rounded aspect-[9/16] w-full object-cover"></video><div class="text-sm mt-1">${x.product||""}</div><a class="${btn2} inline-block mt-2" href="/files/${x.path}" download>Unduh MP4</a><div class="text-xs text-slate-400 mt-1">TikTok: belum diposting</div></div>`).join("")||"<div class='text-slate-400 text-sm'>Belum ada video</div>"}</div>`;
+  if(run)timer=setTimeout(render,3000);}
+ if(tab=="set"){const p=await api("/api/settings/prompt");
+  v.innerHTML=`<h1 class="text-xl font-semibold mb-4">Pengaturan</h1><div class="${card}"><b class="text-sm">Prompt foto produk (default)</b><p class="text-xs text-slate-500 mb-2">Ubah untuk kategori selain pakaian (mis. ganti “baju flat lay” dengan penataan sesuai produk).</p><textarea id="pr" rows="14" class="${inp}">${p.prompt}</textarea><button class="${btn} mt-2" onclick="sp()">Simpan prompt</button></div>`;}
+}
+async function gen(id){const f=new FormData();await fetch(`/api/products/${id}/generate`,{method:"POST",body:f});render()}
+async function ap(id){await fetch(`/api/products/${id}/approve`,{method:"POST"});render()}
+async function del(id){if(confirm("Hapus produk?")){await fetch(`/api/products/${id}`,{method:"DELETE"});render()}}
+async function sp(){await fetch("/api/settings/prompt",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:$("#pr").value})});alert("Tersimpan")}
+async function mk(){if(!sel.size)return alert("Pilih minimal satu produk");
+ await api("/api/videos",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({template_id:$("#tsel").value,product_ids:[...sel]})});go("hist")}
+go("dash");
+</script></body></html>
